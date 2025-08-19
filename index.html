@@ -3,9 +3,12 @@
 <head>
     <meta charset="utf-8">
     <title>Editor de Personagem 3D</title>
+    <!-- BIBLIOTECAS DO BABYLON.JS -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
     <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+    
+    <!-- CSS EMBUTIDO -->
     <style>
         /* Estilos Gerais */
         html, body {
@@ -136,6 +139,7 @@
 </head>
 <body>
 
+    <!-- ESTRUTURA HTML DO JOGO -->
     <div id="mainMenu">
         <h1>Criador 3D</h1>
         <button id="startButton" class="menu-button">Customizar Personagem</button>
@@ -178,7 +182,300 @@
 
     <canvas id="renderCanvas"></canvas>
 
-    <script src="script.js"></script>
+    <!-- JAVASCRIPT EMBUTIDO -->
+    <script>
+        window.addEventListener('DOMContentLoaded', function(){
+            const canvas = document.getElementById('renderCanvas');
+            const engine = new BABYLON.Engine(canvas, true);
+
+            let currentTool = 'camera'; // camera, paint, bucket, eraser, transform
+            let paintColor = "#FF0000";
+            let selectedMesh = null;
+
+            const createScene = function () {
+                const scene = new BABYLON.Scene(engine);
+                scene.clearColor = new BABYLON.Color3.FromHexString("#3d3d3d");
+
+                // Câmera e Luz
+                const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 15, BABYLON.Vector3.Zero(), scene);
+                camera.attachControl(canvas, true);
+                const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+                light.intensity = 1.0;
+
+                // Personagem Principal (Cápsula)
+                const capsule = BABYLON.MeshBuilder.CreateCapsule("capsule", {height: 6, radius: 1.5}, scene);
+                const dynamicTexture = new BABYLON.DynamicTexture("dynamicTexture", {width:1024, height:1024}, scene, true);
+                const material = new BABYLON.StandardMaterial("mat", scene);
+                material.diffuseTexture = dynamicTexture;
+                material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+                capsule.material = material;
+                
+                const textureContext = dynamicTexture.getContext();
+                textureContext.fillStyle = "white";
+                textureContext.fillRect(0, 0, 1024, 1024);
+                dynamicTexture.update();
+
+                // Gerenciador de Gizmo para manipulação de objetos
+                const gizmoManager = new BABYLON.GizmoManager(scene);
+                gizmoManager.positionGizmoEnabled = true;
+                gizmoManager.rotationGizmoEnabled = false;
+                gizmoManager.scaleGizmoEnabled = false;
+                gizmoManager.attachToMesh(null);
+
+                // Lógica de Ferramentas (Pintura, Seleção, etc.)
+                scene.onPointerObservable.add((pointerInfo) => {
+                    if (pointerInfo.type !== BABYLON.PointerEventTypes.POINTERDOWN) return;
+                    
+                    const pickInfo = scene.pick(scene.pointerX, scene.pointerY);
+                    if (!pickInfo.hit) {
+                        // Clicou no fundo, deseleciona o objeto
+                        selectedMesh = null;
+                        gizmoManager.attachToMesh(null);
+                        return;
+                    }
+
+                    const clickedMesh = pickInfo.pickedMesh;
+
+                    if (currentTool === 'transform' && clickedMesh !== capsule) {
+                        selectedMesh = clickedMesh;
+                        gizmoManager.attachToMesh(selectedMesh);
+                    } else if (clickedMesh === capsule && ['paint', 'bucket', 'eraser'].includes(currentTool)) {
+                        const uv = pickInfo.getTextureCoordinates();
+                        if (!uv) return;
+
+                        const x = uv.x * 1024;
+                        const y = (1 - uv.y) * 1024; // Y é invertido
+
+                        if (currentTool === 'paint' || currentTool === 'eraser') {
+                            textureContext.fillStyle = (currentTool === 'eraser') ? "#FFFFFF" : paintColor;
+                            textureContext.beginPath();
+                            textureContext.arc(x, y, 10, 0, 2 * Math.PI);
+                            textureContext.fill();
+                        } else if (currentTool === 'bucket') {
+                            floodFill(textureContext, x, y, hexToRgb(paintColor));
+                        }
+                        dynamicTexture.update();
+                    }
+                });
+                
+                // --- INÍCIO: Funções de UI ---
+
+                // Esconde menu, mostra UI de customização
+                document.getElementById('startButton').addEventListener('click', () => {
+                    document.getElementById('mainMenu').style.display = 'none';
+                    document.getElementById('customizationUI').style.display = 'flex';
+                });
+                
+                // Atualiza o botão ativo
+                function setActiveButton(toolId) {
+                    document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+                    document.getElementById(toolId).classList.add('active');
+                }
+
+                // Seleção de Ferramentas
+                document.getElementById('toolCamera').addEventListener('click', () => {
+                    currentTool = 'camera';
+                    camera.attachControl(canvas, true);
+                    gizmoManager.attachToMesh(null);
+                    setActiveButton('toolCamera');
+                });
+
+                document.getElementById('toolPaint').addEventListener('click', () => {
+                    currentTool = 'paint';
+                    camera.detachControl(canvas);
+                    gizmoManager.attachToMesh(null);
+                    setActiveButton('toolPaint');
+                });
+                
+                document.getElementById('toolBucket').addEventListener('click', () => {
+                    currentTool = 'bucket';
+                    camera.detachControl(canvas);
+                    gizmoManager.attachToMesh(null);
+                    setActiveButton('toolBucket');
+                });
+
+                document.getElementById('toolEraser').addEventListener('click', () => {
+                    currentTool = 'eraser';
+                    camera.detachControl(canvas);
+                    gizmoManager.attachToMesh(null);
+                    setActiveButton('toolEraser');
+                });
+                
+                document.getElementById('toolTransform').addEventListener('click', () => {
+                    currentTool = 'transform';
+                    camera.attachControl(canvas, true);
+                    setActiveButton('toolTransform');
+                });
+
+                document.getElementById('colorPicker').addEventListener('input', (e) => {
+                    paintColor = e.target.value;
+                });
+
+                // Adicionar Formas
+                document.getElementById('addShape').addEventListener('click', () => {
+                    const shapeType = document.getElementById('shapeSelector').value;
+                    let newShape;
+                    const randomPos = () => (Math.random() - 0.5) * 5;
+
+                    if (shapeType === 'sphere') newShape = BABYLON.MeshBuilder.CreateSphere("sphere_" + Date.now(), {diameter: 1.5}, scene);
+                    else if (shapeType === 'box') newShape = BABYLON.MeshBuilder.CreateBox("box_" + Date.now(), {size: 1.5}, scene);
+                    else newShape = BABYLON.MeshBuilder.CreateCylinder("cylinder_" + Date.now(), {height: 2, diameter: 1}, scene);
+                    
+                    newShape.position = new BABYLON.Vector3(randomPos(), randomPos(), randomPos());
+                    newShape.material = new BABYLON.StandardMaterial(shapeType + "Mat", scene);
+                    newShape.material.diffuseColor = BABYLON.Color3.Random();
+                });
+
+                // Ferramentas do Gizmo
+                document.getElementById('toolMove').addEventListener('click', () => {
+                    gizmoManager.positionGizmoEnabled = true;
+                    gizmoManager.rotationGizmoEnabled = false;
+                    gizmoManager.scaleGizmoEnabled = false;
+                });
+                document.getElementById('toolRotate').addEventListener('click', () => {
+                    gizmoManager.positionGizmoEnabled = false;
+                    gizmoManager.rotationGizmoEnabled = true;
+                    gizmoManager.scaleGizmoEnabled = false;
+                });
+                document.getElementById('toolScale').addEventListener('click', () => {
+                    gizmoManager.positionGizmoEnabled = false;
+                    gizmoManager.rotationGizmoEnabled = false;
+                    gizmoManager.scaleGizmoEnabled = true;
+                });
+                
+                // Salvar e Carregar
+                document.getElementById('saveButton').addEventListener('click', () => {
+                    const characterData = {
+                        texture: dynamicTexture.toDataURL(),
+                        shapes: []
+                    };
+
+                    scene.meshes.forEach(mesh => {
+                        if (mesh !== capsule && !mesh.name.includes("gizmo")) { // Ignora a capsula e os gizmos
+                            characterData.shapes.push({
+                                name: mesh.name,
+                                type: mesh.name.split('_')[0], // box, sphere, cylinder
+                                position: mesh.position.asArray(),
+                                rotation: mesh.rotation.asArray(),
+                                scaling: mesh.scaling.asArray(),
+                                color: mesh.material.diffuseColor.asArray()
+                            });
+                        }
+                    });
+
+                    localStorage.setItem('characterData', JSON.stringify(characterData));
+                    alert('Personagem salvo!');
+                });
+
+                document.getElementById('loadButton').addEventListener('click', () => {
+                    // Limpa formas antigas
+                    scene.meshes.filter(m => m !== capsule && !m.name.includes("gizmo")).forEach(m => m.dispose());
+                    
+                    const savedData = localStorage.getItem('characterData');
+                    if (!savedData) {
+                        alert('Nenhum personagem salvo encontrado.');
+                        return;
+                    }
+
+                    const characterData = JSON.parse(savedData);
+                    
+                    // Carregar textura
+                    const img = new Image();
+                    img.src = characterData.texture;
+                    img.onload = () => {
+                        textureContext.clearRect(0, 0, 1024, 1024);
+                        textureContext.drawImage(img, 0, 0);
+                        dynamicTexture.update();
+                    }
+
+                    // Carregar formas
+                    characterData.shapes.forEach(shapeData => {
+                        let newShape;
+                        if (shapeData.type === 'sphere') newShape = BABYLON.MeshBuilder.CreateSphere(shapeData.name, {diameter: 1.5}, scene);
+                        else if (shapeData.type === 'box') newShape = BABYLON.MeshBuilder.CreateBox(shapeData.name, {size: 1.5}, scene);
+                        else newShape = BABYLON.MeshBuilder.CreateCylinder(shapeData.name, {height: 2, diameter: 1}, scene);
+
+                        newShape.position = BABYLON.Vector3.FromArray(shapeData.position);
+                        newShape.rotation = BABYLON.Vector3.FromArray(shapeData.rotation);
+                        newShape.scaling = BABYLON.Vector3.FromArray(shapeData.scaling);
+                        newShape.material = new BABYLON.StandardMaterial(shapeData.name + "Mat", scene);
+                        newShape.material.diffuseColor = BABYLON.Color3.FromArray(shapeData.color);
+                    });
+                    alert('Personagem carregado!');
+                });
+
+                // --- FIM: Funções de UI ---
+
+                return scene;
+            };
+
+            // --- INÍCIO: Funções Auxiliares ---
+            
+            function hexToRgb(hex) {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : null;
+            }
+
+            function floodFill(ctx, x, y, fillColor) {
+                const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+                const { width, height } = ctx.canvas;
+                const stack = [[Math.floor(x), Math.floor(y)]];
+                const targetColor = getPixel(imageData, stack[0][0], stack[0][1]);
+                const fillColorRgb = [fillColor.r, fillColor.g, fillColor.b, 255];
+
+                if (colorsMatch(targetColor, fillColorRgb)) return;
+
+                const processed = new Set();
+                
+                while (stack.length > 0) {
+                    const [cx, cy] = stack.pop();
+                    const key = `${cx},${cy}`;
+
+                    if (cx < 0 || cx >= width || cy < 0 || cy >= height || processed.has(key)) continue;
+
+                    const currentColor = getPixel(imageData, cx, cy);
+                    if (colorsMatch(currentColor, targetColor)) {
+                        setPixel(imageData, cx, cy, fillColorRgb);
+                        processed.add(key);
+
+                        stack.push([cx + 1, cy]);
+                        stack.push([cx - 1, cy]);
+                        stack.push([cx, cy + 1]);
+                        stack.push([cx, cy - 1]);
+                    }
+                }
+                ctx.putImageData(imageData, 0, 0);
+            }
+            
+            function getPixel(imageData, x, y) {
+                const index = (y * imageData.width + x) * 4;
+                return [imageData.data[index], imageData.data[index + 1], imageData.data[index + 2], imageData.data[index + 3]];
+            }
+
+            function setPixel(imageData, x, y, color) {
+                const index = (y * imageData.width + x) * 4;
+                imageData.data[index] = color[0];
+                imageData.data[index + 1] = color[1];
+                imageData.data[index + 2] = color[2];
+                imageData.data[index + 3] = color[3];
+            }
+
+            function colorsMatch(a, b) {
+                // Compara apenas RGB, ignorando o Alpha para evitar problemas de anti-aliasing
+                return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+            }
+            
+            // --- FIM: Funções Auxiliares ---
+
+            const scene = createScene();
+            engine.runRenderLoop(() => scene.render());
+            window.addEventListener('resize', () => engine.resize());
+        });
+    </script>
 
 </body>
 </html>
