@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Editor de Personagem 3D</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+    <style>
+        /* Estilos Gerais */
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            outline: none;
+        }
+
+        /* Menu Principal */
+        #mainMenu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 100;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 221, 0.4);
+            border: 1px solid rgba(0, 255, 221, 0.5);
+        }
+
+        #mainMenu h1 {
+            margin-top: 0;
+            font-size: 3em;
+            text-shadow: 0 0 10px rgba(0, 255, 221, 0.7);
+        }
+
+        .menu-button {
+            background-color: #00c6a9;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .menu-button:hover {
+            background-color: #00e0c0;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 255, 221, 0.4);
+        }
+
+        /* UI de Customização */
+        #customizationUI {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 50;
+            display: none; /* Escondido por padrão */
+            background-color: rgba(40, 40, 40, 0.9);
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #444;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+        }
+        .tool-group:last-child {
+            border-bottom: none;
+        }
+
+        .tool-group h3 {
+            color: #00c6a9;
+            margin: 0 0 5px 0;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+
+        .tool-button, .tool-input, .tool-select {
+            background-color: #333;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 5px;
+            padding: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.9em;
+            text-align: left;
+        }
+        
+        .tool-button.active {
+             background-color: #00c6a9;
+             color: #1a1a1a;
+             font-weight: bold;
+        }
+
+        .tool-button:hover {
+            background-color: #444;
+        }
+        
+        .tool-button.active:hover {
+             background-color: #00e0c0;
+        }
+
+        #colorPicker {
+            padding: 0;
+            border: none;
+            width: 100%;
+            height: 35px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="mainMenu">
+        <h1>Criador 3D</h1>
+        <button id="startButton" class="menu-button">Customizar Personagem</button>
+    </div>
+
+    <div id="customizationUI" style="display: none;">
+        <div class="tool-group">
+            <h3>Navegação</h3>
+            <button id="toolCamera" class="tool-button active">Mover Câmera</button>
+        </div>
+        <div class="tool-group">
+            <h3>Pintura</h3>
+            <button id="toolPaint" class="tool-button">Pincel</button>
+            <button id="toolBucket" class="tool-button">Baldinho</button>
+            <button id="toolEraser" class="tool-button">Borracha</button>
+            <input type="color" id="colorPicker" class="tool-input" value="#FF0000">
+        </div>
+        <div class="tool-group">
+            <h3>Formas</h3>
+            <select id="shapeSelector" class="tool-select">
+                <option value="sphere">Esfera</option>
+                <option value="box">Cubo</option>
+                <option value="cylinder">Cilindro</option>
+            </select>
+            <button id="addShape" class="tool-button">Adicionar Forma</button>
+        </div>
+         <div class="tool-group">
+            <h3>Manipulação</h3>
+            <button id="toolTransform" class="tool-button">Selecionar</button>
+            <button id="toolMove" class="tool-button gizmo-tool">Mover (W)</button>
+            <button id="toolRotate" class="tool-button gizmo-tool">Rotacionar (E)</button>
+            <button id="toolScale" class="tool-button gizmo-tool">Escalar (R)</button>
+        </div>
+        <div class="tool-group">
+            <h3>Projeto</h3>
+            <button id="saveButton" class="tool-button">Salvar</button>
+            <button id="loadButton" class="tool-button">Carregar</button>
+        </div>
+    </div>
+
+    <canvas id="renderCanvas"></canvas>
+
+    <script src="script.js"></script>
+
+</body>
+</html>
